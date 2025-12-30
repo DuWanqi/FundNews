@@ -1,0 +1,5 @@
+{
+  "name": "FundNews",
+  "description": "A premium US stock and fund news aggregator with automated crawling capabilities and a personalized dashboard.",
+  "requestFramePermissions": []
+}
