@@ -27,27 +27,30 @@ const Settings: React.FC = () => {
     try {
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       
+      // Default to English search terms for better US market coverage, but can accept Chinese input
       const searchTerm = keywords ? keywords : "US Stock Market Funds, ETFs, and Major Tech Stocks";
       
       // Enhanced prompt to force JSON structure via text instructions instead of Schema
-      const prompt = `You are a financial news crawler.
+      // CRITICAL UPDATE: Added instructions to output in Simplified Chinese
+      const prompt = `You are a financial news crawler and translator.
       Task: Find the latest news (last ${timeRange}) about: ${searchTerm}.
       Goal: Select ${count} distinct, high-impact news stories.
       
       Requirements:
-      1. Use the googleSearch tool to find real articles.
-      2. Return ONLY a valid JSON array. 
-      3. Do NOT include any markdown formatting (like \`\`\`json), just the raw JSON string.
-      4. CRITICAL: For the "url" field, strictly use the SOURCE URL found in the search grounding. If you cannot find a direct link to the article, leave the "url" field as an empty string "". DO NOT hallucinate or guess URLs.
+      1. Use the googleSearch tool to find real articles. Search in English if necessary to find the best original US market sources.
+      2. **LANGUAGE REQUIREMENT: Translate the 'title', 'summary', and 'tags' fields into Simplified Chinese (简体中文).** This is mandatory.
+      3. Return ONLY a valid JSON array. 
+      4. Do NOT include any markdown formatting (like \`\`\`json), just the raw JSON string.
+      5. CRITICAL: For the "url" field, strictly use the SOURCE URL found in the search grounding. If you cannot find a direct link to the article, leave the "url" field as an empty string "". DO NOT hallucinate or guess URLs.
       
       The JSON objects must follow this structure:
       [
         {
-          "title": "string",
-          "summary": "string (concise, max 2 sentences)",
-          "source": "string (e.g., Bloomberg, CNBC)",
-          "time": "string (e.g., '2 hours ago')",
-          "tags": ["string", "string"],
+          "title": "string (Translated to Chinese)",
+          "summary": "string (Concise summary in Chinese, max 2 sentences)",
+          "source": "string (e.g., Bloomberg, CNBC - Keep in English)",
+          "time": "string (e.g., '2小时前' or '10 mins ago')",
+          "tags": ["string (Chinese)", "string (Chinese)"],
           "isTopStory": boolean,
           "url": "string (The direct link, or empty string if unknown)"
         }
@@ -55,7 +58,7 @@ const Settings: React.FC = () => {
       
       Do not include imageUrl in the JSON unless you are 100% sure of a valid public URL found in the search results.`;
 
-      addLog(`Searching web for: ${searchTerm}...`);
+      addLog(`Searching web for: ${searchTerm} (Output in Chinese)...`);
 
       const response = await ai.models.generateContent({
         model: "gemini-2.5-flash",
@@ -66,7 +69,7 @@ const Settings: React.FC = () => {
         },
       });
 
-      addLog("Parsing search results...");
+      addLog("Parsing and translating results...");
       
       const rawText = response.text;
       if (!rawText) throw new Error("No data received from Gemini.");
@@ -87,6 +90,7 @@ const Settings: React.FC = () => {
         // Safe URL generation: If AI returned empty or invalid URL, fallback to Google Search
         let finalUrl = item.url;
         if (!finalUrl || !finalUrl.startsWith('http') || finalUrl.length < 10) {
+           // Search query can use the Chinese title now
            finalUrl = `https://www.google.com/search?q=${encodeURIComponent(item.title + " " + item.source)}`;
         }
 
@@ -289,7 +293,7 @@ const Settings: React.FC = () => {
         <div className="mt-12 flex flex-col md:flex-row items-center justify-between gap-6 p-6 rounded-3xl bg-[#171026] border border-[#3b2d5e] relative z-10">
           <div className="flex flex-col">
             <p className="text-white font-bold text-lg">准备就绪？</p>
-            <p className="text-purple-300 text-sm">将使用 Gemini API 搜索实时新闻。</p>
+            <p className="text-purple-300 text-sm">将使用 Gemini API 搜索实时新闻并自动翻译。</p>
           </div>
           <div className="flex gap-4 w-full md:w-auto">
             <button 

@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode, useRef } from 'react';
 import { NewsItem } from '../types';
 
 interface NewsContextType {
@@ -19,38 +19,45 @@ export const NewsProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [news, setNews] = useState<NewsItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
-  const [favorites, setFavorites] = useState<NewsItem[]>([]);
 
-  // Initialize favorites from LocalStorage and run cleanup logic
-  useEffect(() => {
-    const storedFavs = localStorage.getItem('fundnews_favorites');
-    if (storedFavs) {
-      try {
+  // Fix: Use lazy initialization to read from LocalStorage BEFORE the first render.
+  // This prevents the 'save' effect from overwriting existing data with an empty array on mount.
+  const [favorites, setFavorites] = useState<NewsItem[]>(() => {
+    if (typeof window === 'undefined') return [];
+    
+    try {
+      const storedFavs = localStorage.getItem('fundnews_favorites');
+      if (storedFavs) {
         const parsedFavs: NewsItem[] = JSON.parse(storedFavs);
         
-        // Auto-cleanup: Filter out items older than 3 days
+        // Run cleanup logic immediately during initialization
         const threeDaysInMillis = 3 * 24 * 60 * 60 * 1000;
         const now = Date.now();
         
         const validFavs = parsedFavs.filter(item => {
-          if (!item.savedAt) return true; // Keep legacy items without date
+          if (!item.savedAt) return true; // Keep legacy items
           const savedTime = new Date(item.savedAt).getTime();
           return (now - savedTime) < threeDaysInMillis;
         });
 
-        if (validFavs.length !== parsedFavs.length) {
-          console.log(`Auto-cleaned ${parsedFavs.length - validFavs.length} expired favorites.`);
-        }
-
-        setFavorites(validFavs);
-      } catch (e) {
-        console.error("Failed to parse favorites", e);
+        return validFavs;
       }
+    } catch (e) {
+      console.error("Failed to parse favorites from local storage", e);
     }
-  }, []);
+    return [];
+  });
+
+  // Use a ref to track if it's the first render to avoid double-saving in Strict Mode if needed,
+  // though lazy init largely solves the main issue.
+  const isFirstRender = useRef(true);
 
   // Sync favorites to LocalStorage whenever they change
   useEffect(() => {
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      return;
+    }
     localStorage.setItem('fundnews_favorites', JSON.stringify(favorites));
   }, [favorites]);
 
@@ -103,4 +110,4 @@ export const useNews = () => {
     throw new Error('useNews must be used within a NewsProvider');
   }
   return context;
-};
+}
